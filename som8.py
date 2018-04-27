@@ -40,11 +40,13 @@ class SOM8bit:
         '''
         
         # store sign of negative elements
-        sign = np.ones(ary.shape)
-        sign[np.where(ary < 0)] = -1.0
+        sign = np.ones(ary.shape, dtype=np.int32)
+        sign[np.where(ary < 0)] = -1
         
         # right bitshift of absolute value
         shifted = np.abs(ary) >> bit
+        shifted[np.where(shifted > 255)] = 255
+        shifted[np.where(shifted < 0)] = 0
         
         # deconvert
         shifted = shifted * sign
@@ -63,7 +65,7 @@ class SOM8bit:
         self.x = x.reshape(1, 1, -1)
         
         # winner has minimum L1 or L2 norm between input and weight
-        sim = np.sum(np.abs(x - self.w), axis=2) if similarity == 'L1' else np.sum((x - self.w) ** 2, axis=2)
+        sim = np.sum(np.abs(x.astype(np.int32) - self.w.astype(np.int32)), axis=2) if similarity == 'L1' else np.sum((x.astype(np.int32) - self.w.astype(np.int32)) ** 2, axis=2)
         win = np.argmin(sim)
         self.win = win / self.w.shape[1], win % self.w.shape[1]
         return self.win
@@ -79,9 +81,11 @@ class SOM8bit:
         
         # neighbourhood function
         h = self.__manhattan_distance__(self.win[0], self.win[1])
+        shift = lr_shift + h
+        shift[np.where(shift > 8)] = 8
+        
+        # update w
         dw = self.x.astype(np.int32) - self.w.astype(np.int32)
-        dw = self.__arith_right_bitshift__(dw, lr_shift + h)
+        dw = self.__arith_right_bitshift__(dw, shift)
         w = self.w + dw
-        w[np.where(w > 255)] = 255
-        w[np.where(w < 0)] = 0
         self.w = w.astype(np.uint8)
